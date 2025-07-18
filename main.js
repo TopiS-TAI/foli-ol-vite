@@ -4,14 +4,16 @@ import {Map, View} from 'ol';
 import TileLayer from 'ol/layer/Tile';
 import OSM from 'ol/source/OSM';
 import VectorLayer from 'ol/layer/Vector';
-import { testSource } from './testData';
+import { testSource } from './test_data/testData';
 import { clickPointStyle, closestStopStyle, lineStyle } from './styles';
-import foliStops from './stops.json';
+import foliStops from './test_data/stops.json';
 import { Circle } from 'ol/geom';
 import {Feature} from 'ol';
-import { stopsTransform } from './utils';
+import { getRoutesByTrips, getRouteVectorFeature, routeTransformer, stopsTransform } from './utils';
+import { getRouteShapes, getTripsByStops } from './api_service';
 
 var stopCircles = []
+var routeFeatures = []
 var clickPoint = null
 const stops = stopsTransform(foliStops)
 const kauppatori = olProj.transform([22.2676864, 60.4513536], 'EPSG:4326', 'EPSG:3857')
@@ -62,14 +64,40 @@ function getSortedNearStops(lon, lat) {
     const bHyp = Math.sqrt((lon - b.stop_lon) ** 2 + (lat - b.stop_lat) ** 2)
     return aHyp - bHyp
   })
-
+  console.log('sortedstops', sortedStops)
   return sortedStops
 }
 
-function handleClick(e) {
+async function handleClick(e) {
   const [lon, lat] = e.coordinate
   createClickCircle(lon, lat)
-  createStopCircles(getSortedNearStops(lon, lat))  
+  const sortedStops = getSortedNearStops(lon, lat)
+  createStopCircles(sortedStops)  
+  const sortedStopNumbers = sortedStops.map(s => s.stop_code)
+  console.log('stop numbers', sortedStopNumbers)
+  const trips = await getTripsByStops(sortedStopNumbers)
+  console.log('trips', trips)
+  const routesPerStop = {}
+  let reducedRoutes = []
+  for (const i in sortedStopNumbers) {
+    const routes = getRoutesByTrips(trips[i])
+    const routeObjects = routes.map(r => ({route_short_name: r}))
+    routesPerStop[sortedStopNumbers[i]] = routes
+    reducedRoutes = [...reducedRoutes, ...routes]
+  }
+  console.log('routesperstop', routesPerStop)
+  reducedRoutes = [... new Set(reducedRoutes)]
+  console.log('reducerdroutes', reducedRoutes)
+  let routeShapes = await getRouteShapes(reducedRoutes)
+  console.log('routeshapes', routeShapes)
+  routeShapes = routeShapes.map(rs => {
+    return routeTransformer(rs)
+  })
+  for (const i in routeShapes) {
+    routeFeatures.push(getRouteVectorFeature(routeShapes[i], reducedRoutes[i]))
+  }
+  console.log('routefeatures', routeFeatures)
+  testSource.addFeatures(routeFeatures)
 }
 
 const map = new Map({
