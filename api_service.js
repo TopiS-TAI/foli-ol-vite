@@ -1,5 +1,5 @@
 const stop_times = 'http://data.foli.fi/gtfs/v0/20250712-192745/stop_times/stop/'
-const route_shapes = 'https://data.foli.fi/gtfs/v0/20250712-192745/shapes/'
+const route_shapes = 'http://data.foli.fi/gtfs/v0/20250712-192745/shapes/'
 
 export async function getTripsByStop(stop) {
     const res = await fetch(stop_times + stop)

@@ -11,27 +11,30 @@ import { Circle } from 'ol/geom';
 import {Feature} from 'ol';
 import { getRoutesByTrips, getRouteVectorFeature, routeTransformer, stopsTransform } from './utils';
 import { getRouteShapes, getTripsByStops } from './api_service';
+import VectorSource from 'ol/source/Vector';
 
 var stopCircles = []
 var routeFeatures = []
 var clickPoint = null
 const stops = stopsTransform(foliStops)
 const kauppatori = olProj.transform([22.2676864, 60.4513536], 'EPSG:4326', 'EPSG:3857')
+const stopsSource = new VectorSource()
+const routesSource = new VectorSource()
 
 function createClickCircle(lon, lat) {
   if (!!clickPoint) {
-    testSource.removeFeature(clickPoint)
+    stopsSource.removeFeature(clickPoint)
   }
   const clickCircle = new Circle([lon, lat], 12)
   const clickFeat = new Feature({ geometry: clickCircle, name: 'ClickPoint' })
   clickFeat.setStyle(clickPointStyle)
-  testSource.addFeature(clickFeat)
+  stopsSource.addFeature(clickFeat)
   clickPoint = clickFeat
 }
 
 function createStopCircles(sortedStops) {
   if (stopCircles.length > 0) {
-    testSource.removeFeatures(stopCircles)
+    stopsSource.removeFeatures(stopCircles)
   }
 
   stopCircles = []
@@ -46,15 +49,15 @@ function createStopCircles(sortedStops) {
     }
     stopCircles.push(f)
   }
-  testSource.addFeatures(stopCircles)
+  stopsSource.addFeatures(stopCircles)
 }
 
 function getSortedNearStops(lon, lat) {
   const nearStops = []
   for (const key in stops) {
     if (
-      Math.abs(lon - stops[key].stop_lon) < 500 &&
-      Math.abs(lat - stops[key].stop_lat) < 500
+      Math.abs(lon - stops[key].stop_lon) < 250 &&
+      Math.abs(lat - stops[key].stop_lat) < 250
     ) {
       nearStops.push(stops[key])
     }
@@ -69,6 +72,7 @@ function getSortedNearStops(lon, lat) {
 }
 
 async function handleClick(e) {
+  if (routeFeatures.length > 0) routesSource.removeFeatures(routeFeatures)
   const [lon, lat] = e.coordinate
   createClickCircle(lon, lat)
   const sortedStops = getSortedNearStops(lon, lat)
@@ -78,26 +82,26 @@ async function handleClick(e) {
   const trips = await getTripsByStops(sortedStopNumbers)
   console.log('trips', trips)
   const routesPerStop = {}
-  let reducedRoutes = []
+  let routes = []
   for (const i in sortedStopNumbers) {
-    const routes = getRoutesByTrips(trips[i])
-    const routeObjects = routes.map(r => ({route_short_name: r}))
-    routesPerStop[sortedStopNumbers[i]] = routes
-    reducedRoutes = [...reducedRoutes, ...routes]
+    const tripRoutes = getRoutesByTrips(trips[i])
+    const routeObjects = tripRoutes.map(r => ({route_short_name: r}))
+    routesPerStop[sortedStopNumbers[i]] = tripRoutes
+    routes = [...routes, ...tripRoutes]
   }
   console.log('routesperstop', routesPerStop)
-  reducedRoutes = [... new Set(reducedRoutes)]
-  console.log('reducerdroutes', reducedRoutes)
-  let routeShapes = await getRouteShapes(reducedRoutes)
-  console.log('routeshapes', routeShapes)
+  let shapeIds = routes.map(r => r.shape_id)
+  shapeIds = [... new Set(shapeIds)]
+  let routeShapes = await getRouteShapes(shapeIds)
   routeShapes = routeShapes.map(rs => {
     return routeTransformer(rs)
   })
+  routeFeatures = []
   for (const i in routeShapes) {
-    routeFeatures.push(getRouteVectorFeature(routeShapes[i], reducedRoutes[i]))
+    routeFeatures.push(getRouteVectorFeature(routeShapes[i], routes[i]))
   }
   console.log('routefeatures', routeFeatures)
-  testSource.addFeatures(routeFeatures)
+  routesSource.addFeatures(routeFeatures)
 }
 
 const map = new Map({
@@ -107,9 +111,13 @@ const map = new Map({
       source: new OSM()
     }),
     new VectorLayer({
-      source: testSource,
+      source: routesSource,
       style: lineStyle,
-    })
+    }),
+    new VectorLayer({
+      source: stopsSource,
+      style: lineStyle,
+    }),
   ],
   view: new View({
     center: kauppatori,
