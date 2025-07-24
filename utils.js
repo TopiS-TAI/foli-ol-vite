@@ -57,8 +57,6 @@ export function getRoutesByTrips(trips) {
   return [...tripsWithRoute]
 }
 
-// export function get
-
 export function getRouteVectorFeature(route, routeName) {
   const routeLine = new LineString(generateLine(route))
   const f = new Feature({

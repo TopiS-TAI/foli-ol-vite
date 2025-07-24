@@ -4,9 +4,11 @@ html, body {
   margin: 0;
   height: 100%;
 }
+main {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
 #map {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 100%;
+  flex-grow: 1;
 }
